@@ -83,6 +83,16 @@ def train(args, params, env, spec):
                 discount_factor=params.discount_factor,
                 weights=weights)
 
+            # targets
+            values = value_fn(states, training=False)
+            advantages = compute_advantages(
+                rewards=rewards_norm,
+                values=values,
+                discount_factor=params.discount_factor,
+                lambda_factor=params.lambda_factor,
+                weights=weights,
+                normalize=True)
+
             # update old policy
             copy_variables(
                 source_vars=policy.trainable_variables,
@@ -97,15 +107,6 @@ def train(args, params, env, spec):
                 with tf.GradientTape() as tape:
                     dist = policy.get_distribution(states, training=False)
                     values = value_fn(states, training=False)
-
-                    # targets
-                    advantages = compute_advantages(
-                        rewards=rewards_norm,
-                        values=values,
-                        discount_factor=params.discount_factor,
-                        lambda_factor=params.lambda_factor,
-                        weights=weights,
-                        normalize=True)
 
                     entropy = dist.entropy()
                     entropy = tf.check_numerics(entropy, 'entropy')
