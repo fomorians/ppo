@@ -1,5 +1,6 @@
 import attr
 import numpy as np
+import tensorflow as tf
 
 from ppo.transitions import Transitions
 
@@ -10,10 +11,15 @@ class Rollout(object):
     max_episode_steps = attr.ib()
 
     def __call__(self, policy, episodes, training=False, render=False):
+        state_size = self.env.observation_space.shape[0]
+        action_size = self.env.action_space.shape[0]
+
         states = np.zeros(
-            shape=(episodes, self.max_episode_steps), dtype=np.int32)
+            shape=(episodes, self.max_episode_steps, state_size),
+            dtype=np.float32)
         actions = np.zeros(
-            shape=(episodes, self.max_episode_steps), dtype=np.int32)
+            shape=(episodes, self.max_episode_steps, action_size),
+            dtype=np.float32)
         rewards = np.zeros(
             shape=(episodes, self.max_episode_steps), dtype=np.float32)
         weights = np.zeros(
@@ -26,10 +32,10 @@ class Rollout(object):
                 if render:
                     self.env.render()
 
-                state_batch = np.reshape(state, (1, 1))
-                action_batch = policy(
-                    state_batch, training=training, return_numpy=True)
-                action = action_batch[0, 0]
+                state_batch = tf.convert_to_tensor(
+                    state[None, None, ...], dtype=np.float32)
+                action_batch = policy(state_batch, training=training)
+                action = action_batch[0, 0].numpy()
 
                 next_state, reward, done, info = self.env.step(action)
 

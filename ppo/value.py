@@ -25,7 +25,8 @@ class Value(tf.keras.Model):
             units=1, activation=None, kernel_initializer=kernel_initializer)
 
     def call(self, inputs, training=False):
-        inputs = tf.one_hot(inputs, self._observation_space.n)
+        inputs = math.normalize(inputs, self._observation_space.low,
+                                self._observation_space.high)
 
         hidden = self.dense1(inputs)
         hidden = self.dense2(hidden)

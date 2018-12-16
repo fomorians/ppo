@@ -7,8 +7,8 @@ name = "pypi"
 gym = "*"
 attrs = "*"
 tqdm = "*"
-numba = "*"
 numpy = "*"
+tensorflow-probability = "*"
 
 [dev-packages]
 ipdb = "*"

@@ -5,7 +5,6 @@ import random
 import argparse
 import numpy as np
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
 
 from tqdm import trange
 
@@ -24,7 +23,7 @@ def main():
     parser.add_argument('--job-dir', required=True, help='Job directory')
     parser.add_argument('--render', action='store_true', help='Enable render')
     parser.add_argument('--seed', default=67, type=int, help='Random seed')
-    parser.add_argument('--env', default='FrozenLake8x8-v0', help='Env name')
+    parser.add_argument('--env', default='Pendulum-v0', help='Env name')
     args, _ = parser.parse_known_args()
     print('args:', vars(args))
 
@@ -58,16 +57,14 @@ def main():
     optimizer = tf.train.AdamOptimizer(learning_rate=params.learning_rate)
 
     # models
-    rate = tfe.Variable(
-        params.rate_max, trainable=False, dtype=tf.float32, name='rate')
     policy = Policy(
         observation_space=env.observation_space,
         action_space=env.action_space,
-        rate=rate)
+        scale=params.scale)
     policy_old = Policy(
         observation_space=env.observation_space,
         action_space=env.action_space,
-        rate=rate)
+        scale=params.scale)
     value_fn = Value(observation_space=env.observation_space)
 
     # rewards
@@ -97,10 +94,6 @@ def main():
     # training iterations
     with trange(params.train_iters) as pbar:
         for it in pbar:
-            # update dropout rate
-            rate.assign(params.rate_min + (params.rate_max - params.rate_min) *
-                        max(0.0, 1 - (it / params.train_iters)))
-
             # sample training transitions
             transitions = rollout(
                 policy=policy, episodes=params.episodes, training=True)
@@ -154,12 +147,12 @@ def main():
                         advantages=advantages,
                         epsilon_clipping=params.epsilon_clipping,
                         weights=weights)
-                    value_loss = params.value_coeff * (
+                    value_loss = params.value_coef * (
                         tf.losses.mean_squared_error(
                             predictions=values,
                             labels=returns,
                             weights=weights))
-                    entropy_loss = -params.entropy_coeff * (
+                    entropy_loss = -params.entropy_coef * (
                         tf.losses.compute_weighted_loss(
                             losses=entropy, weights=weights))
                     loss = policy_loss + value_loss + entropy_loss
@@ -182,8 +175,6 @@ def main():
                                               tf.global_norm(grads))
                     tf.contrib.summary.scalar('gradient_norm',
                                               tf.global_norm(grads_clipped))
-
-                    tf.contrib.summary.scalar('rate', rate)
 
                     tf.contrib.summary.scalar('losses/entropy', entropy_loss)
                     tf.contrib.summary.scalar('losses/policy', policy_loss)
@@ -208,15 +199,14 @@ def main():
                     tf.contrib.summary.histogram('returns', returns)
                     tf.contrib.summary.histogram('values', values)
 
-            # run evaluation
+            # evaluation
             transitions = rollout(
                 policy=policy,
                 episodes=params.episodes,
                 training=False,
                 render=args.render)
-            pbar.set_description('reward: {:.4f}, progress: {:.2f}%'.format(
-                transitions.episodic_reward,
-                (transitions.episodic_reward / spec.reward_threshold) * 100))
+            pbar.set_description('reward: {:.4f}'.format(
+                transitions.episodic_reward))
 
             with tf.contrib.summary.always_record_summaries():
                 tf.contrib.summary.scalar('rewards/eval',
