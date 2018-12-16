@@ -26,7 +26,6 @@ class Rollout(object):
                 if render:
                     self.env.render()
 
-                # TODO: feed sequence
                 state_batch = np.reshape(state, (1, 1))
                 action_batch = policy(
                     state_batch, training=training, return_numpy=True)

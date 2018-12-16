@@ -19,7 +19,40 @@ from ppo.targets import compute_advantages, compute_returns
 from ppo.normalizer import Normalizer
 
 
-def train(args, params, env, spec):
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--job-dir', required=True, help='Job directory')
+    parser.add_argument('--render', action='store_true', help='Enable render')
+    parser.add_argument('--seed', default=67, type=int, help='Random seed')
+    parser.add_argument('--env', default='FrozenLake8x8-v0', help='Env name')
+    args, _ = parser.parse_known_args()
+    print('args:', vars(args))
+
+    # make job dir
+    if not os.path.exists(args.job_dir):
+        os.makedirs(args.job_dir)
+
+    # eager
+    tf.enable_eager_execution()
+
+    # environment
+    env = gym.make(args.env)
+    atexit.register(env.close)
+    spec = env.unwrapped.spec
+
+    # params
+    discount_factor = 1 - (1 / spec.max_episode_steps)
+    params = HyperParams(discount_factor=discount_factor)
+    params_path = os.path.join(args.job_dir, 'params.json')
+    params.save(params_path)
+    print('params:', params)
+
+    # seeding
+    env.seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    tf.set_random_seed(args.seed)
+
     # optimization
     global_step = tf.train.get_or_create_global_step()
     optimizer = tf.train.AdamOptimizer(learning_rate=params.learning_rate)
@@ -192,43 +225,6 @@ def train(args, params, env, spec):
             # save checkpoint
             checkpoint_prefix = os.path.join(args.job_dir, 'ckpt')
             checkpoint.save(file_prefix=checkpoint_prefix)
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--job-dir', required=True, help='Job directory')
-    parser.add_argument('--render', action='store_true', help='Enable render')
-    parser.add_argument('--seed', default=67, type=int, help='Random seed')
-    parser.add_argument('--env', default='FrozenLake8x8-v0', help='Env name')
-    args, _ = parser.parse_known_args()
-    print('args:', vars(args))
-
-    # make job dir
-    if not os.path.exists(args.job_dir):
-        os.makedirs(args.job_dir)
-
-    # eager
-    tf.enable_eager_execution()
-
-    # environment
-    env = gym.make(args.env)
-    atexit.register(env.close)
-    spec = env.unwrapped.spec
-
-    # params
-    discount_factor = 1 - (1 / spec.max_episode_steps)
-    params = HyperParams(discount_factor=discount_factor)
-    params_path = os.path.join(args.job_dir, 'params.json')
-    params.save(params_path)
-    print('params:', params)
-
-    # seeding
-    env.seed(args.seed)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    tf.set_random_seed(args.seed)
-
-    train(args, params, env, spec)
 
 
 if __name__ == '__main__':
