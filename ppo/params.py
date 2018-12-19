@@ -5,17 +5,18 @@ import json
 @attr.s
 class HyperParams(object):
     # training
-    train_iters = attr.ib(default=30)
+    train_iters = attr.ib(default=100)
     episodes = attr.ib(default=10)
     epochs = attr.ib(default=10)
+    eval_interval = attr.ib(default=10)
 
     # losses
-    value_coef = attr.ib(default=1.0)
+    value_coef = attr.ib(default=1e-3)
     entropy_coef = attr.ib(default=0.05)
 
     # optimization
     learning_rate = attr.ib(default=1e-3)
-    grad_clipping = attr.ib(default=10)
+    grad_clipping = attr.ib(default=10.0)
 
     # PPO
     epsilon_clipping = attr.ib(default=0.2)

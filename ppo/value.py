@@ -12,7 +12,7 @@ class Value(tf.keras.Model):
         kernel_initializer = tf.initializers.variance_scaling(scale=2.0)
 
         self.dense1 = tf.keras.layers.Dense(
-            units=128,
+            units=64,
             activation=math.swish,
             kernel_initializer=kernel_initializer)
 

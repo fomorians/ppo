@@ -22,7 +22,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--job-dir', required=True, help='Job directory')
     parser.add_argument('--render', action='store_true', help='Enable render')
-    parser.add_argument('--seed', default=67, type=int, help='Random seed')
+    parser.add_argument('--seed', default=42, type=int, help='Random seed')
     parser.add_argument('--env', default='Pendulum-v0', help='Env name')
     args, _ = parser.parse_known_args()
     print('args:', vars(args))
@@ -200,17 +200,18 @@ def main():
                     tf.contrib.summary.histogram('values', values)
 
             # evaluation
-            transitions = rollout(
-                policy=policy,
-                episodes=params.episodes,
-                training=False,
-                render=args.render)
-            pbar.set_description('reward: {:.4f}'.format(
-                transitions.episodic_reward))
+            if it % params.eval_interval == 0:
+                transitions = rollout(
+                    policy=policy,
+                    episodes=params.episodes,
+                    training=False,
+                    render=args.render)
+                pbar.set_description('reward: {:.4f}'.format(
+                    transitions.episodic_reward))
 
-            with tf.contrib.summary.always_record_summaries():
-                tf.contrib.summary.scalar('rewards/eval',
-                                          transitions.episodic_reward)
+                with tf.contrib.summary.always_record_summaries():
+                    tf.contrib.summary.scalar('rewards/eval',
+                                              transitions.episodic_reward)
 
             # save checkpoint
             checkpoint_prefix = os.path.join(args.job_dir, 'ckpt')
