@@ -26,7 +26,7 @@ class Policy(tf.keras.Model):
             kernel_initializer=kernel_initializer)
         self.dense_loc = tf.keras.layers.Dense(
             units=action_size,
-            activation=None,
+            activation=tf.tanh,
             kernel_initializer=kernel_initializer)
         self.scale_diag_inverse = tfe.Variable(
             math.softplus_inv([scale] * action_size), trainable=True)
@@ -41,7 +41,7 @@ class Policy(tf.keras.Model):
 
         hidden = self.dense1(inputs)
         hidden = self.dense2(hidden)
-        loc = self.dense_loc(hidden)
+        loc = self.dense_loc(hidden) * 2
 
         dist = tfp.distributions.MultivariateNormalDiag(
             loc=loc, scale_diag=self.scale_diag)
