@@ -37,11 +37,9 @@ def main():
     # environment
     env = gym.make(args.env)
     atexit.register(env.close)
-    spec = env.unwrapped.spec
 
     # params
-    discount_factor = 1 - (1 / spec.max_episode_steps)
-    params = HyperParams(discount_factor=discount_factor)
+    params = HyperParams()
     params_path = os.path.join(args.job_dir, 'params.json')
     params.save(params_path)
     print('params:', params)
@@ -69,7 +67,7 @@ def main():
 
     # rewards
     rewards_normalizer = Normalizer(
-        shape=(), center=False, scale=False, clip=None)
+        shape=(), center=False, scale=True, clip=None)
 
     # checkpoints
     checkpoint = tf.train.Checkpoint(
@@ -84,7 +82,7 @@ def main():
     summary_writer.set_as_default()
 
     # rollouts
-    rollout = Rollout(env, spec.max_episode_steps)
+    rollout = Rollout(env, env.spec.max_episode_steps)
 
     # priming
     # XXX: TF eager does not initialize weights until they're called
@@ -103,7 +101,8 @@ def main():
             rewards = tf.convert_to_tensor(transitions.rewards)
             weights = tf.convert_to_tensor(transitions.weights)
 
-            rewards_norm = rewards_normalizer(rewards, training=True)
+            rewards_norm = rewards_normalizer(
+                rewards, weights=weights, training=True)
             returns = compute_returns(
                 rewards_norm,
                 discount_factor=params.discount_factor,
@@ -131,8 +130,8 @@ def main():
             # training epochs
             for epoch in range(params.epochs):
                 with tf.GradientTape() as tape:
-                    dist = policy.get_distribution(states, training=False)
-                    values = value_fn(states, training=False)
+                    dist = policy.get_distribution(states, training=True)
+                    values = value_fn(states, training=True)
 
                     entropy = dist.entropy()
                     entropy = tf.check_numerics(entropy, 'entropy')
@@ -147,14 +146,12 @@ def main():
                         advantages=advantages,
                         epsilon_clipping=params.epsilon_clipping,
                         weights=weights)
-                    value_loss = params.value_coef * (
-                        tf.losses.mean_squared_error(
-                            predictions=values,
-                            labels=returns,
-                            weights=weights))
-                    entropy_loss = -params.entropy_coef * (
-                        tf.losses.compute_weighted_loss(
-                            losses=entropy, weights=weights))
+                    value_loss = tf.losses.mean_squared_error(
+                        predictions=values,
+                        labels=returns,
+                        weights=weights * params.value_coef)
+                    entropy_loss = -tf.losses.compute_weighted_loss(
+                        losses=entropy, weights=weights * params.entropy_coef)
                     loss = policy_loss + value_loss + entropy_loss
 
                 # optimization

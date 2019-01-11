@@ -23,31 +23,33 @@ class Normalizer(tf.keras.Model):
         return tf.sqrt(
             tf.maximum(self.var_sum / tf.to_float(self.count - 1), 0))
 
-    def __call__(self, inputs, training=False):
+    def call(self, inputs, weights, training=False):
+        mask = tf.to_float(tf.not_equal(weights, 0))
+
         if training:
-            self.count.assign_add(tf.reduce_prod(inputs.shape[:2]))
+            self.count.assign_add(tf.to_int32(tf.reduce_sum(mask)))
 
             mean_deltas = tf.reduce_sum(
-                inputs - self.mean[None, None, ...], axis=(0, 1))
-            new_mean = tf.where(
-                tf.greater(self.count, 1),
-                self.mean + (mean_deltas / tf.to_float(self.count)),
-                inputs[0, 0])
+                (inputs - self.mean[None, None, ...]) * mask, axis=(0, 1))
+            new_mean = self.mean + (mean_deltas / tf.to_float(self.count))
 
             var_deltas = (inputs - self.mean[None, None, ...]) * (
                 inputs - new_mean[None, None, ...])
-            new_var_sum = self.var_sum + tf.reduce_sum(var_deltas, axis=(0, 1))
+            new_var_sum = self.var_sum + tf.reduce_sum(
+                var_deltas * mask, axis=(0, 1))
 
             self.mean.assign(new_mean)
             self.var_sum.assign(new_var_sum)
 
         if self.center:
             inputs -= self.mean[None, None, ...]
+            inputs *= mask
 
         if self.scale:
             std = tf.where(
                 math.is_near(self.std, 0.0), tf.ones_like(self.std), self.std)
             inputs /= std[None, None, ...]
+            inputs *= mask
 
         if self.clip:
             inputs = tf.clip_by_value(inputs, -self.clip, self.clip)
