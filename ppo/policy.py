@@ -41,7 +41,7 @@ class Policy(tf.keras.Model):
 
         hidden = self.dense1(inputs)
         hidden = self.dense2(hidden)
-        loc = self.dense_loc(hidden) * 2
+        loc = self.dense_loc(hidden) * self._action_space.high
 
         dist = tfp.distributions.MultivariateNormalDiag(
             loc=loc, scale_diag=self.scale_diag)
