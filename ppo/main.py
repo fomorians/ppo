@@ -14,7 +14,6 @@ from ppo.value import Value
 from ppo.policy import Policy
 from ppo.params import HyperParams
 from ppo.rollout import Rollout
-from ppo.targets import compute_advantages, compute_returns
 
 
 def main():
@@ -106,14 +105,14 @@ def main():
                 scale=rewards_moments.std,
                 weights=weights)
 
-            returns = compute_returns(
+            returns = pyrl.targets.discounted_rewards(
                 rewards_norm,
                 discount_factor=params.discount_factor,
                 weights=weights)
 
             # targets
             values = baseline(states, training=False)
-            advantages = compute_advantages(
+            advantages = pyrl.targets.generalized_advantages(
                 rewards=rewards_norm,
                 values=values,
                 discount_factor=params.discount_factor,
