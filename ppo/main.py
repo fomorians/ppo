@@ -4,18 +4,17 @@ import atexit
 import random
 import argparse
 import numpy as np
+import pyoneer as pynr
+import pyoneer.rl as pyrl
 import tensorflow as tf
 
 from tqdm import trange
 
-from ppo import losses
-from ppo.train import clip_gradients, copy_variables
 from ppo.value import Value
 from ppo.policy import Policy
 from ppo.params import HyperParams
 from ppo.rollout import Rollout
 from ppo.targets import compute_advantages, compute_returns
-from ppo.normalizer import Normalizer
 
 
 def main():
@@ -25,7 +24,7 @@ def main():
     parser.add_argument('--seed', default=42, type=int, help='Random seed')
     parser.add_argument('--env', default='Pendulum-v0', help='Env name')
     args, _ = parser.parse_known_args()
-    print('args:', vars(args))
+    print('args:', args)
 
     # make job dir
     if not os.path.exists(args.job_dir):
@@ -59,23 +58,26 @@ def main():
         observation_space=env.observation_space,
         action_space=env.action_space,
         scale=params.scale)
-    policy_old = Policy(
+    policy_anchor = Policy(
         observation_space=env.observation_space,
         action_space=env.action_space,
         scale=params.scale)
-    value_fn = Value(observation_space=env.observation_space)
+    baseline = Value(observation_space=env.observation_space)
+
+    # strategies
+    exploration_strategy = pyrl.strategies.SampleStrategy(policy)
+    inference_strategy = pyrl.strategies.ModeStrategy(policy)
 
     # rewards
-    rewards_normalizer = Normalizer(
-        shape=(), center=False, scale=True, clip=None)
+    rewards_moments = pynr.nn.ExponentialMovingMoments(shape=(), rate=0.9)
 
     # checkpoints
     checkpoint = tf.train.Checkpoint(
         global_step=global_step,
         optimizer=optimizer,
         policy=policy,
-        value_fn=value_fn,
-        rewards_normalizer=rewards_normalizer)
+        baseline=baseline,
+        rewards_moments=rewards_moments)
 
     # summaries
     summary_writer = tf.contrib.summary.create_file_writer(args.job_dir)
@@ -85,31 +87,32 @@ def main():
     rollout = Rollout(env, env.spec.max_episode_steps)
 
     # priming
-    # XXX: TF eager does not initialize weights until they're called
-    rollout(policy=policy, episodes=1, training=False)
-    rollout(policy=policy_old, episodes=1, training=False)
+    # NOTE: TF eager does not initialize weights until they're called
+    anchor_inference_strategy = pyrl.strategies.ModeStrategy(policy_anchor)
+    rollout(policy=inference_strategy, episodes=1)
+    rollout(policy=anchor_inference_strategy, episodes=1)
 
     # training iterations
     with trange(params.train_iters) as pbar:
         for it in pbar:
             # sample training transitions
-            transitions = rollout(
-                policy=policy, episodes=params.episodes, training=True)
+            states, actions, rewards, weights = rollout(
+                policy=exploration_strategy, episodes=params.episodes)
 
-            states = tf.convert_to_tensor(transitions.states)
-            actions = tf.convert_to_tensor(transitions.actions)
-            rewards = tf.convert_to_tensor(transitions.rewards)
-            weights = tf.convert_to_tensor(transitions.weights)
+            rewards_moments(rewards, weights=weights, training=True)
+            rewards_norm = pynr.math.normalize(
+                rewards,
+                loc=rewards_moments.mean,
+                scale=rewards_moments.std,
+                weights=weights)
 
-            rewards_norm = rewards_normalizer(
-                rewards, weights=weights, training=True)
             returns = compute_returns(
                 rewards_norm,
                 discount_factor=params.discount_factor,
                 weights=weights)
 
             # targets
-            values = value_fn(states, training=False)
+            values = baseline(states, training=False)
             advantages = compute_advantages(
                 rewards=rewards_norm,
                 values=values,
@@ -119,30 +122,31 @@ def main():
                 normalize=True)
 
             # update old policy
-            copy_variables(
-                source_vars=policy.trainable_variables,
-                dest_vars=policy_old.trainable_variables)
+            pynr.training.update_target_variables(
+                source_variables=policy.trainable_variables,
+                target_variables=policy_anchor.trainable_variables)
 
-            dist_old = policy_old.get_distribution(states, training=False)
-            log_probs_old = dist_old.log_prob(actions)
-            log_probs_old = tf.check_numerics(log_probs_old, 'log_probs_old')
+            policy_dist_anchor = policy_anchor(states, training=False)
+            log_probs_anchor = policy_dist_anchor.log_prob(actions)
+            log_probs_anchor = tf.check_numerics(log_probs_anchor,
+                                                 'log_probs_anchor')
 
             # training epochs
             for epoch in range(params.epochs):
                 with tf.GradientTape() as tape:
-                    dist = policy.get_distribution(states, training=True)
-                    values = value_fn(states, training=True)
+                    policy_dist = policy(states, training=True)
+                    values = baseline(states, training=True)
 
-                    entropy = dist.entropy()
+                    entropy = policy_dist.entropy()
                     entropy = tf.check_numerics(entropy, 'entropy')
 
-                    log_probs = dist.log_prob(actions)
+                    log_probs = policy_dist.log_prob(actions)
                     log_probs = tf.check_numerics(log_probs, 'log_probs')
 
                     # losses
-                    policy_loss = losses.policy_ratio_loss(
+                    policy_loss = pyrl.losses.clipped_policy_gradient_loss(
                         log_probs=log_probs,
-                        log_probs_old=log_probs_old,
+                        log_probs_anchor=log_probs_anchor,
                         advantages=advantages,
                         epsilon_clipping=params.epsilon_clipping,
                         weights=weights)
@@ -156,16 +160,21 @@ def main():
 
                 # optimization
                 trainable_variables = (
-                    policy.trainable_variables + value_fn.trainable_variables)
+                    policy.trainable_variables + baseline.trainable_variables)
                 grads = tape.gradient(loss, trainable_variables)
-                grads_clipped = clip_gradients(grads, params.grad_clipping)
+                if params.grad_clipping is not None:
+                    grads_clipped, _ = tf.clip_by_global_norm(
+                        grads, params.grad_clipping)
                 grads_and_vars = zip(grads_clipped, trainable_variables)
                 optimizer.apply_gradients(
                     grads_and_vars, global_step=global_step)
 
-                kl = tf.distributions.kl_divergence(dist, dist_old)
+                kl = tf.distributions.kl_divergence(policy_dist,
+                                                    policy_dist_anchor)
                 entropy_mean = tf.losses.compute_weighted_loss(
                     losses=entropy, weights=weights)
+                episodic_reward = tf.reduce_mean(
+                    tf.reduce_sum(rewards, axis=-1))
 
                 with tf.contrib.summary.always_record_summaries():
                     tf.contrib.summary.scalar('gradient_norm/unclipped',
@@ -179,11 +188,10 @@ def main():
                     tf.contrib.summary.scalar('losses/loss', loss)
 
                     tf.contrib.summary.scalar('rewards/train/mean',
-                                              rewards_normalizer.mean)
+                                              rewards_moments.mean)
                     tf.contrib.summary.scalar('rewards/train/std',
-                                              rewards_normalizer.std)
-                    tf.contrib.summary.scalar('rewards/train',
-                                              transitions.episodic_reward)
+                                              rewards_moments.std)
+                    tf.contrib.summary.scalar('rewards/train', episodic_reward)
 
                     tf.contrib.summary.scalar('entropy', entropy_mean)
                     tf.contrib.summary.scalar('kl', kl)
@@ -198,17 +206,17 @@ def main():
 
             # evaluation
             if it % params.eval_interval == 0:
-                transitions = rollout(
-                    policy=policy,
+                states, actions, rewards, weights = rollout(
+                    policy=inference_strategy,
                     episodes=params.episodes,
-                    training=False,
                     render=args.render)
+                episodic_reward = tf.reduce_mean(
+                    tf.reduce_sum(rewards, axis=-1))
                 pbar.set_description('reward: {:.4f}'.format(
-                    transitions.episodic_reward))
+                    episodic_reward.numpy()))
 
                 with tf.contrib.summary.always_record_summaries():
-                    tf.contrib.summary.scalar('rewards/eval',
-                                              transitions.episodic_reward)
+                    tf.contrib.summary.scalar('rewards/eval', episodic_reward)
 
             # save checkpoint
             checkpoint_prefix = os.path.join(args.job_dir, 'ckpt')

@@ -4,18 +4,15 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-gym = "*"
 attrs = "*"
-tqdm = "*"
-numpy = "*"
+gym = "*"
+tensorflow = "*"
 tensorflow-probability = "*"
+tqdm = "*"
+pyoneer = {editable = true, path = "/Users/fomoro/Documents/pyoneer"}
 
 [dev-packages]
 ipdb = "*"
-tensorflow = "*"
-jupyterlab = "*"
-matplotlib = "*"
-seaborn = "*"
 
 [requires]
 python_version = "3.6.5"
