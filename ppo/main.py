@@ -97,6 +97,7 @@ def main():
             # sample training transitions
             states, actions, rewards, weights = rollout(
                 policy=exploration_strategy, episodes=params.episodes)
+            episodic_reward = tf.reduce_mean(tf.reduce_sum(rewards, axis=-1))
 
             rewards_moments(rewards, weights=weights, training=True)
             rewards_norm = pynr.math.normalize(
@@ -129,6 +130,21 @@ def main():
             log_probs_anchor = policy_dist_anchor.log_prob(actions)
             log_probs_anchor = tf.check_numerics(log_probs_anchor,
                                                  'log_probs_anchor')
+
+            with tf.contrib.summary.always_record_summaries():
+                tf.contrib.summary.scalar('rewards/train/mean',
+                                          rewards_moments.mean)
+                tf.contrib.summary.scalar('rewards/train/std',
+                                          rewards_moments.std)
+                tf.contrib.summary.scalar('rewards/train', episodic_reward)
+
+                tf.contrib.summary.histogram('states', states)
+                tf.contrib.summary.histogram('actions', actions)
+                tf.contrib.summary.histogram('rewards', rewards)
+                tf.contrib.summary.histogram('rewards/norm', rewards_norm)
+                tf.contrib.summary.histogram('advantages', advantages)
+                tf.contrib.summary.histogram('returns', returns)
+                tf.contrib.summary.histogram('values', values)
 
             # training epochs
             for epoch in range(params.epochs):
@@ -172,8 +188,6 @@ def main():
                                                     policy_dist_anchor)
                 entropy_mean = tf.losses.compute_weighted_loss(
                     losses=entropy, weights=weights)
-                episodic_reward = tf.reduce_mean(
-                    tf.reduce_sum(rewards, axis=-1))
 
                 with tf.contrib.summary.always_record_summaries():
                     tf.contrib.summary.scalar('gradient_norm/unclipped',
@@ -186,22 +200,8 @@ def main():
                     tf.contrib.summary.scalar('losses/value', value_loss)
                     tf.contrib.summary.scalar('losses/loss', loss)
 
-                    tf.contrib.summary.scalar('rewards/train/mean',
-                                              rewards_moments.mean)
-                    tf.contrib.summary.scalar('rewards/train/std',
-                                              rewards_moments.std)
-                    tf.contrib.summary.scalar('rewards/train', episodic_reward)
-
                     tf.contrib.summary.scalar('entropy', entropy_mean)
                     tf.contrib.summary.scalar('kl', kl)
-
-                    tf.contrib.summary.histogram('states', states)
-                    tf.contrib.summary.histogram('actions', actions)
-                    tf.contrib.summary.histogram('rewards', rewards)
-                    tf.contrib.summary.histogram('rewards/norm', rewards_norm)
-                    tf.contrib.summary.histogram('advantages', advantages)
-                    tf.contrib.summary.histogram('returns', returns)
-                    tf.contrib.summary.histogram('values', values)
 
             # evaluation
             if it % params.eval_interval == 0:
