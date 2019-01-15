@@ -200,6 +200,7 @@ def main():
                     tf.contrib.summary.scalar('losses/value', value_loss)
                     tf.contrib.summary.scalar('losses/loss', loss)
 
+                    tf.contrib.summary.scalar('scale_diag', policy.scale_diag)
                     tf.contrib.summary.scalar('entropy', entropy_mean)
                     tf.contrib.summary.scalar('kl', kl)
 
