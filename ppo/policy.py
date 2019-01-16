@@ -29,7 +29,7 @@ class Policy(tf.keras.Model):
             activation=tf.tanh,
             kernel_initializer=kernel_initializer)
         self.scale_diag_inverse = tfe.Variable(
-            scale_initializer([scale] * action_size), trainable=True)
+            scale_initializer(self.action_space.shape), trainable=True)
 
     @property
     def scale_diag(self):

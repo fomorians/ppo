@@ -94,8 +94,8 @@ def main():
     # NOTE: TF eager does not initialize weights until they're called
     mock_states = tf.zeros(
         shape=(1, 1, env.observation_space.shape[0]), dtype=np.float32)
-    policy(mock_states, reset_state=True)
-    policy_anchor(mock_states, reset_state=True)
+    policy(mock_states, training=False)
+    policy_anchor(mock_states, training=False)
 
     # sync variables
     pynr.training.update_target_variables(
