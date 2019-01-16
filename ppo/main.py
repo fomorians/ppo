@@ -49,7 +49,7 @@ def main():
     tf.set_random_seed(args.seed)
 
     # optimization
-    global_step = tf.train.get_or_create_global_step()
+    global_step = tf.train.create_global_step()
     optimizer = tf.train.AdamOptimizer(learning_rate=params.learning_rate)
 
     # models
@@ -67,8 +67,9 @@ def main():
     exploration_strategy = pyrl.strategies.SampleStrategy(policy)
     inference_strategy = pyrl.strategies.ModeStrategy(policy)
 
-    # rewards
-    rewards_moments = pynr.nn.ExponentialMovingMoments(shape=(), rate=0.9)
+    # normalization
+    rewards_moments = pynr.nn.ExponentialMovingMoments(
+        shape=(), rate=params.reward_decay)
 
     # checkpoints
     checkpoint = tf.train.Checkpoint(
@@ -77,19 +78,29 @@ def main():
         policy=policy,
         baseline=baseline,
         rewards_moments=rewards_moments)
+    checkpoint_path = tf.train.latest_checkpoint(args.job_dir)
+    if checkpoint_path is not None:
+        checkpoint.restore(checkpoint_path)
 
     # summaries
-    summary_writer = tf.contrib.summary.create_file_writer(args.job_dir)
+    summary_writer = tf.contrib.summary.create_file_writer(
+        args.job_dir, max_queue=100, flush_millis=5 * 60 * 1000)
     summary_writer.set_as_default()
 
     # rollouts
-    rollout = Rollout(env, env.spec.max_episode_steps)
+    rollout = Rollout(env, max_episode_steps=env.spec.max_episode_steps)
 
-    # priming
+    # prime models
     # NOTE: TF eager does not initialize weights until they're called
-    anchor_inference_strategy = pyrl.strategies.ModeStrategy(policy_anchor)
-    rollout(policy=inference_strategy, episodes=1)
-    rollout(policy=anchor_inference_strategy, episodes=1)
+    mock_states = tf.zeros(
+        shape=(1, 1, env.observation_space.shape[0]), dtype=np.float32)
+    policy(mock_states, reset_state=True)
+    policy_anchor(mock_states, reset_state=True)
+
+    # sync variables
+    pynr.training.update_target_variables(
+        source_variables=policy.variables,
+        target_variables=policy_anchor.variables)
 
     # training iterations
     with trange(params.train_iters) as pbar:
@@ -120,11 +131,6 @@ def main():
                 lambda_factor=params.lambda_factor,
                 weights=weights,
                 normalize=True)
-
-            # update old policy
-            pynr.training.update_target_variables(
-                source_variables=policy.trainable_variables,
-                target_variables=policy_anchor.trainable_variables)
 
             policy_dist_anchor = policy_anchor(states, training=False)
             log_probs_anchor = policy_dist_anchor.log_prob(actions)

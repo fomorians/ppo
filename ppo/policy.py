@@ -5,15 +5,15 @@ import tensorflow_probability as tfp
 
 
 class Policy(tf.keras.Model):
-    def __init__(self, observation_space, action_space, scale):
-        super(Policy, self).__init__()
+    def __init__(self, observation_space, action_space, scale, **kwargs):
+        super(Policy, self).__init__(**kwargs)
 
         self.observation_space = observation_space
         self.action_space = action_space
 
         action_size = self.action_space.shape[0]
 
-        kernel_initializer = tf.initializers.variance_scaling(scale=2.0)
+        kernel_initializer = tf.keras.initializers.VarianceScaling(scale=2.0)
         scale_initializer = pynr.initializers.SoftplusInverse(scale=scale)
 
         self.dense1 = tf.keras.layers.Dense(

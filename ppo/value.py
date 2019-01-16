@@ -3,12 +3,12 @@ import tensorflow as tf
 
 
 class Value(tf.keras.Model):
-    def __init__(self, observation_space):
-        super(Value, self).__init__()
+    def __init__(self, observation_space, **kwargs):
+        super(Value, self).__init__(**kwargs)
 
         self.observation_space = observation_space
 
-        kernel_initializer = tf.initializers.variance_scaling(scale=2.0)
+        kernel_initializer = tf.keras.initializers.VarianceScaling(scale=2.0)
 
         self.dense1 = tf.keras.layers.Dense(
             units=64,

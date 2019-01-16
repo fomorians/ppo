@@ -9,6 +9,7 @@ class HyperParams(object):
     episodes = attr.ib(default=10)
     epochs = attr.ib(default=10)
     eval_interval = attr.ib(default=10)
+    reward_decay = attr.ib(default=0.9)
 
     # losses
     value_coef = attr.ib(default=1e-3)
