@@ -92,10 +92,8 @@ def main():
 
     # prime models
     # NOTE: TF eager does not initialize weights until they're called
-    mock_states = tf.zeros(
-        shape=(1, 1, env.observation_space.shape[0]), dtype=np.float32)
-    policy(mock_states, training=False)
-    policy_anchor(mock_states, training=False)
+    rollout(policy=inference_strategy, episodes=1)
+    rollout(policy=pyrl.strategies.ModeStrategy(policy_anchor), episodes=1)
 
     # training iterations
     with trange(params.train_iters) as pbar:
@@ -106,11 +104,7 @@ def main():
             episodic_reward = tf.reduce_mean(tf.reduce_sum(rewards, axis=-1))
 
             rewards_moments(rewards, weights=weights, training=True)
-            rewards_norm = pynr.math.normalize(
-                rewards,
-                loc=rewards_moments.mean,
-                scale=rewards_moments.std,
-                weights=weights)
+            rewards_norm = pynr.math.safe_divide(rewards, rewards_moments.std)
 
             returns = pyrl.targets.discounted_rewards(
                 rewards_norm,
