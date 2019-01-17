@@ -97,11 +97,6 @@ def main():
     policy(mock_states, training=False)
     policy_anchor(mock_states, training=False)
 
-    # sync variables
-    pynr.training.update_target_variables(
-        source_variables=policy.variables,
-        target_variables=policy_anchor.variables)
-
     # training iterations
     with trange(params.train_iters) as pbar:
         for it in pbar:
@@ -131,6 +126,11 @@ def main():
                 lambda_factor=params.lambda_factor,
                 weights=weights,
                 normalize=True)
+
+            # sync variables
+            pynr.training.update_target_variables(
+                source_variables=policy.variables,
+                target_variables=policy_anchor.variables)
 
             policy_dist_anchor = policy_anchor(states, training=False)
             log_probs_anchor = policy_dist_anchor.log_prob(actions)
