@@ -6,10 +6,8 @@ name = "pypi"
 [packages]
 attrs = "*"
 gym = "*"
-tensorflow = "*"
-tensorflow-probability = "*"
 tqdm = "*"
-pyoneer = {editable = true, path = "/Users/fomoro/Documents/pyoneer"}
+pyoneer = {editable = true,path = "/Users/fomoro/Documents/pyoneer"}
 
 [dev-packages]
 ipdb = "*"
