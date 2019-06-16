@@ -26,5 +26,5 @@ class HyperParams(object):
     scale = attr.ib(default=1.0)
 
     def save(self, path):
-        with open(path, 'w') as fp:
+        with open(path, "w") as fp:
             json.dump(attr.asdict(self), fp)

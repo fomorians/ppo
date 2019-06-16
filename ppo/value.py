@@ -12,19 +12,23 @@ class Value(tf.keras.Model):
 
         self.dense1 = tf.keras.layers.Dense(
             units=64,
-            activation=pynr.nn.swish,
-            kernel_initializer=kernel_initializer)
+            activation=pynr.activations.swish,
+            kernel_initializer=kernel_initializer,
+        )
         self.dense2 = tf.keras.layers.Dense(
             units=64,
-            activation=pynr.nn.swish,
-            kernel_initializer=kernel_initializer)
+            activation=pynr.activations.swish,
+            kernel_initializer=kernel_initializer,
+        )
 
         self.dense_value = tf.keras.layers.Dense(
-            units=1, activation=None, kernel_initializer=kernel_initializer)
+            units=1, activation=None, kernel_initializer=kernel_initializer
+        )
 
     def call(self, inputs, training=False):
-        loc, var = pynr.nn.moments_from_range(self.observation_space.low,
-                                              self.observation_space.high)
+        loc, var = pynr.nn.range_moments(
+            self.observation_space.low, self.observation_space.high
+        )
         inputs = pynr.math.normalize(inputs, loc=loc, scale=tf.sqrt(var))
 
         hidden = self.dense1(inputs)

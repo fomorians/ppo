@@ -12,15 +12,13 @@ class Rollout:
         action_size = self.env.action_space.shape[0]
 
         states = np.zeros(
-            shape=(episodes, self.max_episode_steps, state_size),
-            dtype=np.float32)
+            shape=(episodes, self.max_episode_steps, state_size), dtype=np.float32
+        )
         actions = np.zeros(
-            shape=(episodes, self.max_episode_steps, action_size),
-            dtype=np.float32)
-        rewards = np.zeros(
-            shape=(episodes, self.max_episode_steps), dtype=np.float32)
-        weights = np.zeros(
-            shape=(episodes, self.max_episode_steps), dtype=np.float32)
+            shape=(episodes, self.max_episode_steps, action_size), dtype=np.float32
+        )
+        rewards = np.zeros(shape=(episodes, self.max_episode_steps), dtype=np.float32)
+        weights = np.zeros(shape=(episodes, self.max_episode_steps), dtype=np.float32)
 
         for episode in range(episodes):
             state = self.env.reset()
@@ -30,8 +28,7 @@ class Rollout:
                     self.env.render()
 
                 state_tensor = tf.convert_to_tensor(state, dtype=tf.float32)
-                action_batch = policy(
-                    state_tensor[None, None, ...], training=False)
+                action_batch = policy(state_tensor[None, None, ...], training=False)
                 action = action_batch[0, 0].numpy()
 
                 next_state, reward, done, info = self.env.step(action)

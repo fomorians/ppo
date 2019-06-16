@@ -8,6 +8,9 @@ attrs = "*"
 gym = "*"
 tqdm = "*"
 pyoneer = {editable = true,path = "/Users/fomoro/Documents/pyoneer"}
+tf-nightly-2-0-preview = "*"
+tfp-nightly = "*"
+tb-nightly = "*"
 
 [dev-packages]
 ipdb = "*"
