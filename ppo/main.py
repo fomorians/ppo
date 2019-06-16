@@ -55,11 +55,6 @@ def main():
         action_space=env.action_space,
         scale=params.scale,
     )
-    policy_anchor = Policy(
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-        scale=params.scale,
-    )
     baseline = Value(observation_space=env.observation_space)
 
     # strategies
@@ -97,7 +92,6 @@ def main():
         shape=(1, 1, env.observation_space.shape[0]), dtype=np.float32
     )
     policy(mock_states, training=False)
-    policy_anchor(mock_states, training=False)
 
     advantages_fn = pyrl.targets.GeneralizedAdvantages(
         discount_factor=params.discount_factor,
@@ -137,13 +131,7 @@ def main():
             )
             returns = returns_fn(rewards=rewards_norm, sample_weight=weights)
 
-            # sync variables
-            pynr.variables.update_target_variables(
-                source_variables=policy.variables,
-                target_variables=policy_anchor.variables,
-            )
-
-            policy_anchor_dist = policy_anchor(states, training=False)
+            policy_anchor_dist = policy(states, training=False)
             log_probs_anchor = policy_anchor_dist.log_prob(actions)
 
             tf.summary.scalar(
