@@ -7,10 +7,9 @@ name = "pypi"
 attrs = "*"
 gym = "*"
 tqdm = "*"
-pyoneer = {editable = true,path = "/Users/fomoro/Documents/pyoneer"}
-tf-nightly-2-0-preview = "*"
+fomoro-pyoneer = "*"
+tensorflow = "==2.0.0-beta1"
 tfp-nightly = "*"
-tb-nightly = "*"
 
 [dev-packages]
 ipdb = "*"
