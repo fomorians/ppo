@@ -26,7 +26,7 @@ class Value(tf.keras.Model):
         )
 
     def call(self, inputs, training=False):
-        loc, var = pynr.nn.range_moments(
+        loc, var = pynr.moments.range_moments(
             self.observation_space.low, self.observation_space.high
         )
         inputs = pynr.math.normalize(inputs, loc=loc, scale=tf.sqrt(var))

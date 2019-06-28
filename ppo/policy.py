@@ -38,7 +38,7 @@ class Policy(tf.keras.Model):
         return tf.nn.softplus(self.scale_diag_inverse)
 
     def call(self, inputs, training=None):
-        loc, var = pynr.nn.range_moments(
+        loc, var = pynr.moments.range_moments(
             self.observation_space.low, self.observation_space.high
         )
         inputs = pynr.math.normalize(inputs, loc=loc, scale=tf.sqrt(var))

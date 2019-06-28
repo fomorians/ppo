@@ -2,50 +2,63 @@ import numpy as np
 import tensorflow as tf
 
 
-class Rollout:
+class BatchRollout:
     def __init__(self, env, max_episode_steps):
         self.env = env
         self.max_episode_steps = max_episode_steps
 
     def __call__(self, policy, episodes, render=False):
-        state_size = self.env.observation_space.shape[0]
-        action_size = self.env.action_space.shape[0]
+        assert len(self.env) == episodes
 
-        states = np.zeros(
-            shape=(episodes, self.max_episode_steps, state_size), dtype=np.float32
+        observation_space = self.env.observation_space
+        action_space = self.env.action_space
+
+        observations = np.zeros(
+            shape=(episodes, self.max_episode_steps) + observation_space.shape,
+            dtype=observation_space.dtype,
         )
         actions = np.zeros(
-            shape=(episodes, self.max_episode_steps, action_size), dtype=np.float32
+            shape=(episodes, self.max_episode_steps) + action_space.shape,
+            dtype=action_space.dtype,
         )
         rewards = np.zeros(shape=(episodes, self.max_episode_steps), dtype=np.float32)
         weights = np.zeros(shape=(episodes, self.max_episode_steps), dtype=np.float32)
 
-        for episode in range(episodes):
-            state = self.env.reset()
+        batch_size = len(self.env)
+        episode_done = np.zeros(shape=batch_size, dtype=np.bool)
 
-            for step in range(self.max_episode_steps):
-                if render:
-                    self.env.render()
+        observation = self.env.reset()
 
-                state_tensor = tf.convert_to_tensor(state, dtype=tf.float32)
-                action_batch = policy(state_tensor[None, None, ...], training=False)
-                action = action_batch[0, 0].numpy()
+        for step in range(self.max_episode_steps):
+            if render:
+                self.env.envs[0].render()
 
-                next_state, reward, done, info = self.env.step(action)
+            observation_tensor = tf.convert_to_tensor(observation, dtype=tf.float32)
+            action_tensor = policy(observation_tensor[:, None, ...], training=False)
+            action = action_tensor[:, 0].numpy()
 
-                states[episode, step] = state
-                actions[episode, step] = action
-                rewards[episode, step] = reward
-                weights[episode, step] = 1.0
+            observation_next, reward, done, info = self.env.step(action)
 
-                if done:
-                    break
+            observations[:, step] = observation
+            actions[:, step] = action
+            rewards[:, step] = reward
+            weights[:, step] = np.where(episode_done, 0.0, 1.0)
 
-                state = next_state
+            # update episode done status
+            episode_done = episode_done | done
 
-        states = tf.convert_to_tensor(states)
+            # end the rollout if all episodes are done
+            if np.all(episode_done):
+                break
+
+            observation = observation_next
+
+        # ensure rewards are masked
+        rewards *= weights
+
+        observations = tf.convert_to_tensor(observations)
         actions = tf.convert_to_tensor(actions)
         rewards = tf.convert_to_tensor(rewards)
         weights = tf.convert_to_tensor(weights)
 
-        return states, actions, rewards, weights
+        return observations, actions, rewards, weights

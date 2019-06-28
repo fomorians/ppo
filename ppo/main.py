@@ -15,13 +15,15 @@ from tensorflow.python.keras.utils import losses_utils
 from ppo.value import Value
 from ppo.policy import Policy
 from ppo.params import HyperParams
-from ppo.rollout import Rollout
+from ppo.rollout import BatchRollout
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--job-dir", required=True, help="Job directory")
-    parser.add_argument("--render", action="store_true", help="Enable render")
+    parser.add_argument(
+        "--render", action="store_true", help="Enable evaluation render"
+    )
     parser.add_argument("--seed", default=42, type=int, help="Random seed")
     parser.add_argument("--env", default="Pendulum-v0", help="Env name")
     args, _ = parser.parse_known_args()
@@ -30,15 +32,17 @@ def main():
     # make job dir
     os.makedirs(args.job_dir, exist_ok=True)
 
-    # environment
-    env = gym.make(args.env)
-    atexit.register(env.close)
-
     # params
     params = HyperParams()
     params_path = os.path.join(args.job_dir, "params.json")
     params.save(params_path)
     print("params:", params)
+
+    # environment
+    env = pyrl.wrappers.Batch(
+        lambda batch_id: gym.make(args.env), batch_size=params.episodes
+    )
+    atexit.register(env.close)
 
     # seeding
     env.seed(args.seed)
@@ -62,7 +66,7 @@ def main():
     inference_strategy = pyrl.strategies.Mode(policy)
 
     # normalization
-    rewards_moments = pynr.nn.ExponentialMovingMoments(
+    rewards_moments = pynr.moments.ExponentialMovingMoments(
         shape=(), rate=params.reward_decay
     )
 
@@ -84,7 +88,7 @@ def main():
     summary_writer.set_as_default()
 
     # rollouts
-    rollout = Rollout(env, max_episode_steps=env.spec.max_episode_steps)
+    rollout = BatchRollout(env, max_episode_steps=env.spec.max_episode_steps)
 
     # prime models
     # NOTE: TF eager does not initialize weights until they're called
@@ -98,7 +102,7 @@ def main():
         lambda_factor=params.lambda_factor,
         normalize=True,
     )
-    returns_fn = pyrl.targets.DiscountedRewards(discount_factor=params.discount_factor)
+    returns_fn = pyrl.targets.DiscountedReturns(discount_factor=params.discount_factor)
 
     value_loss_fn = tf.losses.MeanSquaredError()
     policy_loss_fn = pyrl.losses.ClippedPolicyGradient(
@@ -215,7 +219,7 @@ def main():
                 )
 
             # evaluation
-            if it % params.eval_interval == 0:
+            if it % params.eval_interval == params.eval_interval - 1:
                 states, actions, rewards, weights = rollout(
                     policy=inference_strategy,
                     episodes=params.episodes,
