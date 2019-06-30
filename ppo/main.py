@@ -12,8 +12,7 @@ import tensorflow_probability as tfp
 from tqdm import trange
 from tensorflow.python.keras.utils import losses_utils
 
-from ppo.value import Value
-from ppo.policy import Policy
+from ppo.models import Value, Policy
 from ppo.params import HyperParams
 from ppo.rollout import BatchRollout
 
